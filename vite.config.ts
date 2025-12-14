@@ -20,5 +20,8 @@ export default defineConfig(({ mode }) => {
       }
     },
     base: '/oppo-ja/',
+    build: {
+      outDir: 'docs',
+    }
   };
 });

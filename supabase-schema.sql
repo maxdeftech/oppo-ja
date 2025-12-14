@@ -9,12 +9,17 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('job_seeker', 'business', 'freelancer', 'admin', 'staff_verification')),
+  role TEXT NOT NULL CHECK (role IN ('job_seeker', 'business', 'freelancer', 'admin', 'staff_verification', 'ceo')),
   avatar_url TEXT,
   verified BOOLEAN DEFAULT FALSE,
   location TEXT,
   trn_encrypted TEXT,
   trn_masked TEXT,
+  bio TEXT,
+  experience JSONB DEFAULT '[]',
+  skills TEXT[] DEFAULT '{}',
+  linkedin_url TEXT,
+  phone TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

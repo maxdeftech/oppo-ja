@@ -24,6 +24,7 @@ export async function signUp(data: SignUpData) {
             email: data.email,
             password: data.password,
             options: {
+                emailRedirectTo: import.meta.env.PROD ? 'https://maxdeftech.github.io/oppo-ja/' : window.location.origin,
                 data: {
                     name: data.name,
                     role: data.role.toLowerCase(),

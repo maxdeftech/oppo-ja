@@ -3,7 +3,8 @@ export enum UserRole {
   BUSINESS = 'BUSINESS',
   FREELANCER = 'FREELANCER',
   ADMIN = 'ADMIN', // MDT Staff
-  STAFF_VERIFICATION = 'STAFF_VERIFICATION'
+  STAFF_VERIFICATION = 'STAFF_VERIFICATION',
+  CEO = 'CEO'
 }
 
 export enum ApplicationStatus {
@@ -45,8 +46,14 @@ export interface User {
   role: UserRole;
   avatarUrl?: string;
   verified?: boolean;
+  emailVerified?: boolean;
   location?: Parish;
   trnMasked?: string; // e.g. ***-***-123
+  bio?: string;
+  experience?: any[]; // JSON structure for experience
+  skills?: string[];
+  linkedinUrl?: string;
+  phone?: string;
 }
 
 export interface JobListing {

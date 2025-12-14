@@ -156,7 +156,7 @@ CREATE POLICY "Admins can view all verification requests" ON verification_reques
     EXISTS (
       SELECT 1 FROM users
       WHERE users.id = auth.uid()
-      AND users.role IN ('admin', 'staff_verification')
+      AND users.role IN ('admin', 'staff_verification', 'ceo')
     )
   );
 
@@ -165,7 +165,7 @@ CREATE POLICY "Admins can update verification requests" ON verification_requests
     EXISTS (
       SELECT 1 FROM users
       WHERE users.id = auth.uid()
-      AND users.role IN ('admin', 'staff_verification')
+      AND users.role IN ('admin', 'staff_verification', 'ceo')
     )
   );
 

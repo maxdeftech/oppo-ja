@@ -275,6 +275,12 @@ const AuthPage = ({ type, onLogin }: { type: 'login' | 'register', onLogin: (use
               Business
             </button>
             <button
+              onClick={() => setRole(UserRole.CEO)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${role === UserRole.CEO ? 'bg-violet-100 text-violet-800 ring-2 ring-violet-500' : 'bg-gray-100 text-gray-500'}`}
+            >
+              CEO
+            </button>
+            <button
               onClick={() => setRole(UserRole.ADMIN)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${role === UserRole.ADMIN ? 'bg-violet-100 text-violet-800 ring-2 ring-violet-500' : 'bg-gray-100 text-gray-500'}`}
             >
@@ -349,6 +355,7 @@ const AuthPage = ({ type, onLogin }: { type: 'login' | 'register', onLogin: (use
                 >
                   <option value={UserRole.JOB_SEEKER}>Job Seeker</option>
                   <option value={UserRole.BUSINESS}>Business Owner</option>
+                  <option value={UserRole.CEO}>CEO / Executive</option>
                   <option value={UserRole.ADMIN}>MDT Admin</option>
                 </select>
               </div>
@@ -1281,8 +1288,9 @@ const UserDashboard = ({ user, onNavigate }: { user: User, onNavigate: (page: st
 const CEODashboard = ({ user }: { user: User }) => {
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
+  const [verifications, setVerifications] = useState<any[]>([]); // New state
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'database'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'database' | 'verifications'>('overview');
 
   useEffect(() => {
     loadData();
@@ -1291,16 +1299,48 @@ const CEODashboard = ({ user }: { user: User }) => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [statsData, usersData] = await Promise.all([
+      const [statsData, usersData, verificationsData] = await Promise.all([
         adminApi.getPlatformStats(),
-        adminApi.getAllUsers()
+        adminApi.getAllUsers(),
+        verificationsApi.getPendingVerifications()
       ]);
       setStats(statsData);
       setUsers(usersData);
+      // Map verifications to match UI expectations
+      setVerifications(verificationsData.map((v: any) => ({
+        id: v.id,
+        businessName: v.business_name,
+        registrationNumber: v.registration_number,
+        trn: v.trn,
+        status: v.status,
+        submittedDate: new Date(v.created_at).toLocaleDateString(),
+      })));
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApprove = async (id: string) => {
+    if (!user.id) return;
+    try {
+      await verificationsApi.approveVerification(id, user.id);
+      loadData(); // Reload all data to refresh list
+    } catch (error) {
+      console.error('Error approving verification:', error);
+      alert('Failed to approve verification');
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    if (!user.id) return;
+    try {
+      await verificationsApi.rejectVerification(id, user.id);
+      loadData();
+    } catch (error) {
+      console.error('Error rejecting verification:', error);
+      alert('Failed to reject verification');
     }
   };
 
@@ -1337,6 +1377,17 @@ const CEODashboard = ({ user }: { user: User }) => {
             className={`px-4 py-2 rounded-md ${activeTab === 'users' ? 'bg-violet-600 text-white' : 'bg-white text-gray-700 border'}`}
           >
             All Users
+          </button>
+          <button
+            onClick={() => setActiveTab('verifications')}
+            className={`px-4 py-2 rounded-md ${activeTab === 'verifications' ? 'bg-violet-600 text-white' : 'bg-white text-gray-700 border'}`}
+          >
+            Verifications
+            {verifications.length > 0 && (
+              <span className="ml-2 bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-bold">
+                {verifications.length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('database')}
@@ -1430,6 +1481,58 @@ const CEODashboard = ({ user }: { user: User }) => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'verifications' && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+            <h3 className="text-lg font-bold">Pending Verifications</h3>
+            <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">High Priority</span>
+          </div>
+          <div className="overflow-x-auto">
+            {verifications.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                No pending verifications found.
+              </div>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Business</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Registration</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">TRN</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {verifications.map((v) => (
+                    <tr key={v.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap font-medium">{v.businessName}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">{v.registrationNumber}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{v.trn}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{v.submittedDate}</td>
+                      <td className="px-6 py-4 whitespace-nowrap flex space-x-2">
+                        <button
+                          onClick={() => handleApprove(v.id)}
+                          className="px-3 py-1 bg-green-100 text-green-700 rounded-md text-sm font-medium hover:bg-green-200 flex items-center"
+                        >
+                          <CheckCircle className="w-3 h-3 mr-1" /> Approve
+                        </button>
+                        <button
+                          onClick={() => handleReject(v.id)}
+                          className="px-3 py-1 bg-red-100 text-red-700 rounded-md text-sm font-medium hover:bg-red-200 flex items-center"
+                        >
+                          <X className="w-3 h-3 mr-1" /> Reject
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}

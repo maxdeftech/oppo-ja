@@ -160,6 +160,16 @@ export async function getCurrentUser() {
         if (error?.message?.includes('AuthSessionMissingError') || error?.name === 'AuthSessionMissingError') {
             return null;
         }
+
+        // Handle invalid refresh token by clearing session
+        if (error?.message?.includes('Invalid Refresh Token') ||
+            error?.message?.includes('Refresh Token Not Found') ||
+            error?.code === 'PGRST301') { // JWT expired often bubbles as this too
+            console.warn('Session invalid, clearing storage:', error.message);
+            await supabase.auth.signOut();
+            return null;
+        }
+
         console.error('Get current user error:', error);
         return null;
     }

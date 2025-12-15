@@ -44,3 +44,39 @@ export async function backupDatabase() {
     await new Promise(resolve => setTimeout(resolve, 3000));
     return true;
 }
+
+// Get pending admin/business requests (for CEO)
+export async function getPendingAdmins() {
+    const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'admin')
+        .eq('verified', false)
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+}
+
+// Approve admin/user
+export async function approveUser(userId: string) {
+    const { data, error } = await supabase
+        .from('users')
+        .update({ verified: true })
+        .eq('id', userId)
+        .select();
+
+    if (error) throw error;
+    return data;
+}
+
+// Reject admin/user (delete)
+export async function rejectUser(userId: string) {
+    const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+
+    if (error) throw error;
+    return true;
+}

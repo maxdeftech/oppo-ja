@@ -36,6 +36,7 @@ import * as applicationsApi from './api/applications';
 import * as verificationsApi from './api/verifications';
 import * as adminApi from './api/admin';
 import * as savedJobsApi from './api/savedJobs';
+import { isSupabaseConfigured } from './lib/supabaseClient';
 
 // --- SUB-COMPONENTS (IN-FILE FOR SIMPLICITY DUE TO RESTRICTIONS) ---
 
@@ -1288,9 +1289,10 @@ const UserDashboard = ({ user, onNavigate }: { user: User, onNavigate: (page: st
 const CEODashboard = ({ user }: { user: User }) => {
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
-  const [verifications, setVerifications] = useState<any[]>([]); // New state
+  const [verifications, setVerifications] = useState<any[]>([]);
+  const [pendingStaff, setPendingStaff] = useState<any[]>([]); // New state
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'database' | 'verifications'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'database' | 'verifications' | 'staff'>('overview');
 
   useEffect(() => {
     loadData();
@@ -1299,10 +1301,11 @@ const CEODashboard = ({ user }: { user: User }) => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [statsData, usersData, verificationsData] = await Promise.all([
+      const [statsData, usersData, verificationsData, staffData] = await Promise.all([
         adminApi.getPlatformStats(),
         adminApi.getAllUsers(),
-        verificationsApi.getPendingVerifications()
+        verificationsApi.getPendingVerifications(),
+        adminApi.getPendingAdmins() // Fetch pending admins
       ]);
       setStats(statsData);
       setUsers(usersData);
@@ -1315,11 +1318,44 @@ const CEODashboard = ({ user }: { user: User }) => {
         status: v.status,
         submittedDate: new Date(v.created_at).toLocaleDateString(),
       })));
+      setPendingStaff(staffData); // Set pending admins
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleApproveStaff = async (id: string) => {
+    try {
+      await adminApi.approveUser(id);
+      loadData(); // Reload to refresh list
+    } catch (error) {
+      console.error('Error approving staff:', error);
+      alert('Failed to approve staff member');
+    }
+  };
+
+  const handleRejectStaff = async (id: string) => {
+    try {
+      await adminApi.rejectUser(id); // Assuming an API call to reject a user
+      loadData(); // Reload to refresh list
+    } catch (error) {
+      console.error('Error rejecting staff:', error);
+      alert('Failed to reject staff member');
+    }
+  };
+
+  const handlePurge = async () => {
+    if (confirm('WARNING: Are you sure you want to PURGE the database? This cannot be undone.')) {
+      await adminApi.purgeDatabase();
+      alert('Database purged successfully (Simulation).');
+    }
+  };
+
+  const handleBackup = async () => {
+    await adminApi.backupDatabase();
+    alert('Database backup created successfully.');
   };
 
   const handleApprove = async (id: string) => {
@@ -1344,18 +1380,6 @@ const CEODashboard = ({ user }: { user: User }) => {
     }
   };
 
-  const handlePurge = async () => {
-    if (confirm('WARNING: Are you sure you want to PURGE the database? This cannot be undone.')) {
-      await adminApi.purgeDatabase();
-      alert('Database purged successfully (Simulation).');
-    }
-  };
-
-  const handleBackup = async () => {
-    await adminApi.backupDatabase();
-    alert('Database backup created successfully.');
-  };
-
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-violet-600" /></div>;
 
   return (
@@ -1377,6 +1401,17 @@ const CEODashboard = ({ user }: { user: User }) => {
             className={`px-4 py-2 rounded-md ${activeTab === 'users' ? 'bg-violet-600 text-white' : 'bg-white text-gray-700 border'}`}
           >
             All Users
+          </button>
+          <button
+            onClick={() => setActiveTab('staff')}
+            className={`px-4 py-2 rounded-md ${activeTab === 'staff' ? 'bg-violet-600 text-white' : 'bg-white text-gray-700 border'}`}
+          >
+            Staff Requests
+            {pendingStaff.length > 0 && (
+              <span className="ml-2 bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-bold">
+                {pendingStaff.length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('verifications')}
@@ -1485,6 +1520,53 @@ const CEODashboard = ({ user }: { user: User }) => {
         </div>
       )}
 
+      {activeTab === 'staff' && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-6 border-b border-gray-200">
+            <h3 className="text-lg font-bold">Pending Staff Approvals</h3>
+            <p className="text-sm text-gray-500">Approve or reject new admin account requests.</p>
+          </div>
+          {pendingStaff.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              No pending staff requests.
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {pendingStaff.map((req) => (
+                <div key={req.id} className="p-6 flex items-center justify-between hover:bg-gray-50">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                      <Shield className="w-6 h-6 text-purple-600" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900">{req.name}</h4>
+                      <div className="flex items-center text-sm text-gray-500 mt-1">
+                        <span className="mr-3">{req.email}</span>
+                        <span>• {new Date(req.created_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => handleRejectStaff(req.id)}
+                      className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      onClick={() => handleApproveStaff(req.id)}
+                      className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors shadow-sm"
+                    >
+                      Approve Access
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {activeTab === 'verifications' && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-6 border-b border-gray-200 flex justify-between items-center">
@@ -1573,6 +1655,27 @@ export default function App() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  if (!isSupabaseConfigured()) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 border-l-4 border-red-500">
+          <div className="flex items-center mb-4">
+            <AlertCircle className="w-8 h-8 text-red-500 mr-3" />
+            <h1 className="text-xl font-bold text-gray-900">Configuration Error</h1>
+          </div>
+          <p className="text-gray-600 mb-4">The application cannot start because the backend connection is missing.</p>
+          <div className="bg-gray-100 p-4 rounded text-sm text-gray-700 font-mono mb-4 overflow-x-auto">
+            VITE_SUPABASE_URL<br />
+            VITE_SUPABASE_ANON_KEY
+          </div>
+          <p className="text-sm text-gray-500">
+            Please create a <code className="bg-gray-100 px-1 rounded">.env.local</code> file in the project root with these variables.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     // Check for existing session on mount
@@ -1675,22 +1778,65 @@ export default function App() {
           setSelectedJobId(jobId);
           setCurrentPage('job-details');
         }} />;
-        return <JobDetailsPage
-          jobId={selectedJobId}
-          onNavigate={setCurrentPage}
-          onBack={() => setCurrentPage('jobs')}
-        />;
+        return <JobDetailsPage jobId={selectedJobId} onNavigate={setCurrentPage} onBack={() => setCurrentPage('jobs')} />;
       case 'dashboard':
         if (!user) return <AuthPage type="login" onLogin={handleLogin} />;
-        return <UserDashboard user={user} onNavigate={setCurrentPage} />;
+        if (user.role === UserRole.BUSINESS && !user.verified) {
+          return (
+            <div className="max-w-2xl mx-auto mt-16 p-8 bg-white rounded-xl shadow-lg border border-yellow-200 text-center">
+              <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Clock className="w-8 h-8 text-yellow-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Verification Pending</h2>
+              <p className="text-gray-600 mb-6">
+                Your business account is currently under review. A request has been sent to our verification team.
+                You will be notified once your profile has been approved by the CEO or an Admin.
+              </p>
+              <div className="flex justify-center space-x-4">
+                <button
+                  onClick={handleLogout}
+                  className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          );
+        }
+        if (user.role === UserRole.BUSINESS) return <UserDashboard user={user!} onNavigate={setCurrentPage} />;
+        return <UserDashboard user={user!} onNavigate={setCurrentPage} />;
       case 'post-job':
-        if (!user || user.role !== UserRole.BUSINESS) return <UserDashboard user={user!} onNavigate={setCurrentPage} />;
+        if (!user) return <AuthPage type="login" onLogin={handleLogin} />;
+        if (user.role !== UserRole.BUSINESS) return <UserDashboard user={user!} onNavigate={setCurrentPage} />;
         return <PostJobPage user={user} onNavigate={setCurrentPage} />;
       case 'admin':
         if (!user || user.role !== UserRole.ADMIN) return <div className="p-8 text-center">Access Denied</div>;
+        if (!user.verified) {
+          return (
+            <div className="max-w-2xl mx-auto mt-16 p-8 bg-white rounded-xl shadow-lg border border-blue-200 text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Shield className="w-8 h-8 text-blue-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Admin Approval Required</h2>
+              <p className="text-gray-600 mb-6">
+                Your admin account requests must be approved by the CEO before you can access the dashboard.
+                Please contact the executive team to expedite your request.
+              </p>
+              <div className="flex justify-center space-x-4">
+                <button
+                  onClick={handleLogout}
+                  className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          );
+        }
         return <AdminDashboard user={user} />;
       case 'ceo':
         if (!user || user.role !== UserRole.CEO) return <div className="p-8 text-center">Access Denied</div>;
+        // CEO access not blocked by verification yet as per plan, assuming manual first fix
         return <CEODashboard user={user} />;
       default:
         return <LandingPage onNavigate={setCurrentPage} />;

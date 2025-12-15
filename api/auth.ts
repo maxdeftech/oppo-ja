@@ -121,9 +121,25 @@ export async function signIn(data: SignInData) {
             .from('users')
             .select('*')
             .eq('id', authData.user.id)
-            .single();
+            .maybeSingle();
 
         if (userError) throw userError;
+
+        // Handle missing profile
+        if (!userData) {
+            console.warn('User profile missing for ID:', authData.user.id);
+            return {
+                user: authData.user,
+                profile: {
+                    id: authData.user.id,
+                    email: authData.user.email,
+                    name: authData.user.user_metadata?.name || 'Unknown User',
+                    role: (authData.user.user_metadata?.role || 'job_seeker') as UserRole,
+                    verified: false,
+                    location: authData.user.user_metadata?.location || null
+                }
+            };
+        }
 
         return { user: authData.user, profile: userData };
     } catch (error: any) {
@@ -150,9 +166,25 @@ export async function getCurrentUser() {
             .from('users')
             .select('*')
             .eq('id', user.id)
-            .single();
+            .maybeSingle();
 
         if (userError) throw userError;
+
+        // If profile missing (zombie account), return minimal structure
+        if (!userData) {
+            console.warn('User profile missing for ID:', user.id);
+            return {
+                user,
+                profile: {
+                    id: user.id,
+                    email: user.email,
+                    name: user.user_metadata?.name || 'Unknown User',
+                    role: (user.user_metadata?.role || 'job_seeker') as UserRole,
+                    verified: false,
+                    location: user.user_metadata?.location || null
+                }
+            };
+        }
 
         return { user, profile: userData };
     } catch (error: any) {
